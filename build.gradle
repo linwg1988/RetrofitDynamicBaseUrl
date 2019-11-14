@@ -3,13 +3,15 @@
 buildscript {
     repositories {
         maven {//本地Maven仓库地址
-            url uri('D:/repos')
+            url uri('E:/repos')
         }
         google()
         jcenter()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.4.2'
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.5'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
         classpath 'org.linwg.dynamic:plugins:1.0.0'
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -19,7 +21,7 @@ buildscript {
 allprojects {
     repositories {
         maven {//本地Maven仓库地址
-            url uri('D:/repos')
+            url uri('E:/repos')
         }
         google()
         jcenter()

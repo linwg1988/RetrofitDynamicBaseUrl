@@ -27,7 +27,7 @@ class DynamicBaseUrlTransform extends Transform {
 
     @Override
     String getName() {
-        return "MyTransform"
+        return "DynamicBaseUrlTransform"
     }
 
     @Override
