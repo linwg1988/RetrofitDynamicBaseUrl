@@ -5,21 +5,25 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class TransformClassVisitor extends ClassVisitor {
+public class FindIgnoreMethodClassVisitor extends ClassVisitor {
     private boolean isTarget = false;
     private boolean isInterface;
-    private AnnotationValueGetterVisitor annotationValueGetterVisitor;
     private String serviceAnnotation;
-    private String methodAnnotation;
-    private List<String> ignoreMethodList;
+    private String ignoreAnnotation;
+    private List<IgnoreMethodVisitor> methodVisitorList = new ArrayList<>();
+    private List<String> ignoreMethod = new ArrayList<>();
 
-    public TransformClassVisitor(ClassVisitor cv, String serviceAnnotation, String methodAnnotation, List<String> ignoreMethodList) {
+    public List<String> getIgnoreMethod() {
+        return ignoreMethod;
+    }
+
+    public FindIgnoreMethodClassVisitor(ClassVisitor cv, String serviceAnnotation, String ignoreAnnotation) {
         super(Opcodes.ASM5, cv);
         this.serviceAnnotation = serviceAnnotation;
-        this.methodAnnotation = methodAnnotation;
-        this.ignoreMethodList = ignoreMethodList;
+        this.ignoreAnnotation = ignoreAnnotation;
     }
 
     @Override
@@ -31,25 +35,32 @@ public class TransformClassVisitor extends ClassVisitor {
     @Override
     public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
         String targetClassName = serviceAnnotation.replace(".", "/");
-        AnnotationVisitor annotationVisitor = super.visitAnnotation(desc, visible);
         if (isInterface && desc.contains(targetClassName)) {
             isTarget = true;
-            annotationValueGetterVisitor = new AnnotationValueGetterVisitor(annotationVisitor);
-            return annotationValueGetterVisitor;
         }
-        return annotationVisitor;
+        return super.visitAnnotation(desc, visible);
     }
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
         MethodVisitor methodVisitor = cv.visitMethod(access, name, desc, signature, exceptions);
         if (isTarget) {
-            String annotationValue = annotationValueGetterVisitor.getAnnotationValue();
-            if (ignoreMethodList != null && ignoreMethodList.contains(access + name + desc + signature)) {
-                return methodVisitor;
-            }
-            return new TransformMethodVisitor(annotationValue, methodVisitor, methodAnnotation);
+            String key = access + name + desc + signature;
+            IgnoreMethodVisitor tmv = new IgnoreMethodVisitor(key, Opcodes.ASM4, methodVisitor, ignoreAnnotation);
+            methodVisitorList.add(tmv);
+            return tmv;
         }
         return methodVisitor;
+    }
+
+    @Override
+    public void visitEnd() {
+        for (int i = 0; i < methodVisitorList.size(); i++) {
+            IgnoreMethodVisitor methodVisitor = methodVisitorList.get(i);
+            if (methodVisitor.isDynamicIgnore()) {
+                ignoreMethod.add(methodVisitor.getMethodName());
+            }
+        }
+        super.visitEnd();
     }
 }

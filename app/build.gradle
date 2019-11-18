@@ -38,5 +38,6 @@ dynamicBaseUrlConfig{
     services 'ApiService'
     serviceAnnotation 'org.linwg.retrofitdynamicbaseurl.ServiceHeader'
     methodAnnotation 'retrofit2.http.Headers'
+    ignoreAnnotation 'org.linwg.retrofitdynamicbaseurl.DynamicIgnore'
     ignoreJar true
 }

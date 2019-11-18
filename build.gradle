@@ -3,7 +3,7 @@
 buildscript {
     repositories {
         maven {//本地Maven仓库地址
-            url uri('E:/repos')
+            url uri('D:/repos')
         }
         google()
         jcenter()
@@ -21,7 +21,7 @@ buildscript {
 allprojects {
     repositories {
         maven {//本地Maven仓库地址
-            url uri('E:/repos')
+            url uri('D:/repos')
         }
         google()
         jcenter()

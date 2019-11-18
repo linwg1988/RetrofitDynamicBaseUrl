@@ -3,7 +3,7 @@ apply plugin: 'maven'
 //发布在本地，../plugin 文件夹
 uploadArchives {
     repositories.mavenDeployer {
-        repository(url: uri('E:/repos'))
+        repository(url: uri('D:/repos'))
         pom.groupId = 'org.linwg.dynamic'
         pom.artifactId = 'plugins'
         pom.version = '1.0.0'

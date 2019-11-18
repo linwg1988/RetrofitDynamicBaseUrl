@@ -25,10 +25,10 @@ public final class RetrofitBaseUrlInterceptor implements Interceptor {
             if (host != null && host.startsWith("http")) {
                 String url = request.url().url().toString();
                 url = url.replace(Constants.BASE_URL, host);
-                Log.i("UrlInterceptor", "url = " + url);
-                request = request.newBuilder().url(url).build();
+                request = request.newBuilder().url(url).removeHeader("ConfigHost").build();
             }
         }
+        Log.i("UrlInterceptor", "url = " + request.url());
         return chain.proceed(request);
     }
 }

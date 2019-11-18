@@ -1,15 +1,29 @@
 package org.linwg.http;
 
 import org.linwg.retrofitdynamicbaseurl.Constants;
+import org.linwg.retrofitdynamicbaseurl.DynamicIgnore;
 import org.linwg.retrofitdynamicbaseurl.ServiceHeader;
 
-import io.reactivex.Observable;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
 import retrofit2.http.GET;
-import retrofit2.http.Query;
+import retrofit2.http.Headers;
 
-@ServiceHeader("ConfigHost:" + Constants.BAIDU_HOST_KEY)
+@ServiceHeader("ConfigHost:" + Constants.SINA_HOST_KEY)
 public interface ApiService {
 
     @GET("/users")
-    Observable<String> methodA(@Query("since") int lastIdQueried, @Query("per_page") int perPage);
+    Call<ResponseBody> methodA();
+
+    @Headers("Test:testHeader")
+    @GET("/users")
+    Call<ResponseBody> methodB();
+
+    @Headers({"Test1:testHeader1", "Test2:testHeader2"})
+    @GET("/users")
+    Call<ResponseBody> methodC();
+
+    @DynamicIgnore
+    @GET("/users")
+    Call<ResponseBody> methodD();
 }

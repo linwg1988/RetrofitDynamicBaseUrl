@@ -43,6 +43,7 @@ public final class OKHttpUtil {
         RetrofitBaseUrlInterceptor interceptor = new RetrofitBaseUrlInterceptor();
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .addInterceptor(interceptor)
+                .addInterceptor(new HttpLoggingInterceptor())
                 .retryOnConnectionFailure(true);
         okHttpClient = builder.connectTimeout(60, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).writeTimeout(20, TimeUnit.SECONDS)
                 .build();

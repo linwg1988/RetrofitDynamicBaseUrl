@@ -4,11 +4,12 @@ import com.android.annotations.NonNull
 import com.android.build.api.transform.*
 import com.android.build.gradle.internal.pipeline.TransformManager
 import com.android.ide.common.internal.WaitableExecutor
-import org.linwg.plugins.visitor.TransformClassVisitor
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.IOUtils
 import org.gradle.api.Project
+import org.linwg.plugins.visitor.FindIgnoreMethodClassVisitor
+import org.linwg.plugins.visitor.TransformClassVisitor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 
@@ -50,11 +51,10 @@ class DynamicBaseUrlTransform extends Transform {
         String sa = project.dynamicBaseUrlConfig.serviceAnnotation
         String ma = project.dynamicBaseUrlConfig.methodAnnotation
         String[] services = project.dynamicBaseUrlConfig.services
-        println("dynamicBaseUrlConfig.serviceAnnotation = " + sa)
+        String ignoreAnnotation = project.dynamicBaseUrlConfig.ignoreAnnotation
         if (sa == null || sa.length() == 0) {
-            throw new RuntimeException("build.gradle must be config : dynamicBaseUrlConfig serviceAnnotation required.")
+            throw new RuntimeException("build.gradle property miss : dynamicBaseUrlConfig.serviceAnnotation required.")
         }
-        println '--------------- Plugin visit start --------------- '
         def startTime = System.currentTimeMillis()
         Collection<TransformInput> inputs = transformInvocation.inputs
         TransformOutputProvider outputProvider = transformInvocation.outputProvider
@@ -72,7 +72,7 @@ class DynamicBaseUrlTransform extends Transform {
                 waitableExecutor.execute(new Callable<Object>() {
                     @Override
                     Object call() throws Exception {
-                        handleDirectoryInput(directoryInput, outputProvider, sa, services, ma, incremental)
+                        handleDirectoryInput(directoryInput, outputProvider, sa, services, ma, incremental, ignoreAnnotation)
                         return null
                     }
                 })
@@ -84,7 +84,7 @@ class DynamicBaseUrlTransform extends Transform {
                 waitableExecutor.execute(new Callable<Object>() {
                     @Override
                     Object call() throws Exception {
-                        handleJarInputs(jarInput, outputProvider, sa, project.dynamicBaseUrlConfig.ignoreJar, services, ma, incremental)
+                        handleJarInputs(jarInput, outputProvider, sa, project.dynamicBaseUrlConfig.ignoreJar, services, ma, incremental, ignoreAnnotation)
                         return null
                     }
                 })
@@ -92,8 +92,7 @@ class DynamicBaseUrlTransform extends Transform {
         }
         waitableExecutor.waitForTasksWithQuickFail(true)
         def cost = (System.currentTimeMillis() - startTime) / 1000
-        println '--------------- Plugin visit end --------------- '
-        println "Plugin cost ： $cost s"
+        println "> Task :app:DynamicBaseUrlTransform transform cost ： $cost s"
     }
 
     /**
@@ -104,14 +103,15 @@ class DynamicBaseUrlTransform extends Transform {
                                      String serviceAnnotation,
                                      String[] services,
                                      String methodAnnotation,
-                                     boolean incremental) {
+                                     boolean incremental,
+                                     String ignoreAnnotation) {
         def dest = outputProvider.getContentLocation(directoryInput.name,
                 directoryInput.contentTypes, directoryInput.scopes,
                 Format.DIRECTORY)
         if (incremental) {
-            processIncrementalDirectoryInput(directoryInput, dest, serviceAnnotation, services, methodAnnotation)
+            processIncrementalDirectoryInput(directoryInput, dest, serviceAnnotation, services, methodAnnotation, ignoreAnnotation)
         } else {
-            directoryInputTransform(directoryInput, dest, serviceAnnotation, services, methodAnnotation)
+            directoryInputTransform(directoryInput, dest, serviceAnnotation, services, methodAnnotation, ignoreAnnotation)
         }
     }
 
@@ -126,7 +126,8 @@ class DynamicBaseUrlTransform extends Transform {
     static void processIncrementalDirectoryInput(DirectoryInput directoryInput, File dest,
                                                  String serviceAnnotation,
                                                  String[] services,
-                                                 String methodAnnotation) {
+                                                 String methodAnnotation,
+                                                 String ignoreAnnotation) {
         FileUtils.forceMkdir(dest)
         def srcDirPath = directoryInput.getFile().getAbsolutePath()
         def destDirPath = dest.getAbsolutePath()
@@ -144,7 +145,7 @@ class DynamicBaseUrlTransform extends Transform {
                 case Status.CHANGED:
                     //文件添加，修改 需要对文件进行拷贝
                     FileUtils.touch(destFile)
-                    singleFileTransform(inputFile, destFile, services, serviceAnnotation, methodAnnotation)
+                    singleFileTransform(inputFile, destFile, services, serviceAnnotation, methodAnnotation, ignoreAnnotation)
                     break
                 case Status.REMOVED:
                     //如果源文件状态是已经被删除了，那么目标文件也要删掉
@@ -164,10 +165,10 @@ class DynamicBaseUrlTransform extends Transform {
      * @param serviceAnnotation
      * @param methodAnnotation
      */
-    static void singleFileTransform(File inputFile, File destFile, String[] services, String serviceAnnotation, String methodAnnotation) {
+    static void singleFileTransform(File inputFile, File destFile, String[] services, String serviceAnnotation, String methodAnnotation, String ignoreAnnotation) {
         def name = inputFile.name
         if (checkClassFile(name, services)) {
-            injectAnnotation(inputFile, serviceAnnotation, methodAnnotation)
+            injectAnnotation(inputFile, serviceAnnotation, methodAnnotation, ignoreAnnotation)
         }
         //处理完输入文件之后，要把输出给下一个任务
         FileUtils.copyFile(inputFile, destFile)
@@ -184,14 +185,15 @@ class DynamicBaseUrlTransform extends Transform {
     static void directoryInputTransform(DirectoryInput directoryInput, File dest,
                                         String serviceAnnotation,
                                         String[] services,
-                                        String methodAnnotation) {
+                                        String methodAnnotation,
+                                        String ignoreAnnotation) {
         //是否是目录
         if (directoryInput.file.isDirectory()) {
             //列出目录所有文件（包含子文件夹，子文件夹内文件）
             directoryInput.file.eachFileRecurse { File file ->
                 def name = file.name
                 if (checkClassFile(name, services)) {
-                    injectAnnotation(file, serviceAnnotation, methodAnnotation)
+                    injectAnnotation(file, serviceAnnotation, methodAnnotation, ignoreAnnotation)
                 }
             }
         }
@@ -205,11 +207,18 @@ class DynamicBaseUrlTransform extends Transform {
      * @param serviceAnnotation
      * @param methodAnnotation
      */
-    static void injectAnnotation(File file, String serviceAnnotation, String methodAnnotation) {
-        println '----------- deal with "class" file <' + file.name + '> -----------'
+    static void injectAnnotation(File file, String serviceAnnotation, String methodAnnotation, String ignoreAnnotation) {
+        ArrayList<String> method = null
+        if (ignoreAnnotation != null || ignoreAnnotation.length() > 0) {
+            ClassReader ignoreReader = new ClassReader(file.bytes)
+            ClassWriter ignoreWriter = new ClassWriter(ignoreReader, ClassWriter.COMPUTE_MAXS)
+            FindIgnoreMethodClassVisitor icv = new FindIgnoreMethodClassVisitor(ignoreWriter, serviceAnnotation, ignoreAnnotation)
+            ignoreReader.accept(icv, ClassReader.EXPAND_FRAMES)
+            method = icv.getIgnoreMethod()
+        }
         ClassReader classReader = new ClassReader(file.bytes)
         ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)
-        TransformClassVisitor cv = new TransformClassVisitor(classWriter, serviceAnnotation, methodAnnotation)
+        TransformClassVisitor cv = new TransformClassVisitor(classWriter, serviceAnnotation, methodAnnotation, method)
         classReader.accept(cv, ClassReader.EXPAND_FRAMES)
         byte[] code = classWriter.toByteArray()
         FileOutputStream fos = new FileOutputStream(
@@ -221,7 +230,9 @@ class DynamicBaseUrlTransform extends Transform {
     /**
      * 处理Jar中的class文件
      */
-    static void handleJarInputs(JarInput jarInput, TransformOutputProvider outputProvider, String serviceAnnotation, boolean ignoreJar, String[] services, String methodAnnotation, boolean incremental) {
+    static void handleJarInputs(JarInput jarInput, TransformOutputProvider outputProvider, String serviceAnnotation,
+                                boolean ignoreJar, String[] services, String methodAnnotation,
+                                boolean incremental, String ignoreAnnotation) {
         def destFile = outputProvider.getContentLocation(jarInput.getFile().getAbsolutePath(),
                 jarInput.contentTypes, jarInput.scopes, Format.JAR)
         if (incremental) {
@@ -235,11 +246,11 @@ class DynamicBaseUrlTransform extends Transform {
                     if (destFile.exists()) {
                         FileUtils.forceDelete(destFile)
                     }
-                    processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation)
+                    processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation, ignoreAnnotation)
                     break
                 case Status.ADDED:
                     //文件添加，需要对文件进行拷贝
-                    processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation)
+                    processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation, ignoreAnnotation)
                     break
                 case Status.REMOVED:
                     //如果源jar文件状态是已经被删除了，那么目标jar文件也要删掉
@@ -250,11 +261,13 @@ class DynamicBaseUrlTransform extends Transform {
             }
         } else {
             //不处理增量编译，直接全拷贝
-            processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation)
+            processJarInputTransform(jarInput, outputProvider, serviceAnnotation, ignoreJar, services, methodAnnotation, ignoreAnnotation)
         }
     }
 
-    static void processJarInputTransform(JarInput jarInput, TransformOutputProvider outputProvider, String serviceAnnotation, boolean ignoreJar, String[] services, String methodAnnotation) {
+    static void processJarInputTransform(JarInput jarInput, TransformOutputProvider outputProvider,
+                                         String serviceAnnotation, boolean ignoreJar,
+                                         String[] services, String methodAnnotation, String ignoreAnnotation) {
         //不处理增量编译，直接全拷贝
         if (jarInput.file.getAbsolutePath().endsWith(".jar") && !ignoreJar) {
             //重命名输出文件,因为可能同名,会覆盖
@@ -282,9 +295,13 @@ class DynamicBaseUrlTransform extends Transform {
                     //class文件处理
                     println '----------- deal with "jar" class file <' + entryName + '> -----------'
                     jarOutputStream.putNextEntry(zipEntry)
+                    def method = null
+                    if (ignoreAnnotation != null || ignoreAnnotation.length() > 0) {
+                        method = findIgnoreMethod(inputStream, serviceAnnotation, ignoreAnnotation)
+                    }
                     ClassReader classReader = new ClassReader(IOUtils.toByteArray(inputStream))
                     ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)
-                    TransformClassVisitor cv = new TransformClassVisitor(classWriter, serviceAnnotation, methodAnnotation)
+                    TransformClassVisitor cv = new TransformClassVisitor(classWriter, serviceAnnotation, methodAnnotation, method)
                     classReader.accept(cv, ClassReader.EXPAND_FRAMES)
                     byte[] code = classWriter.toByteArray()
                     jarOutputStream.write(code)
@@ -306,6 +323,14 @@ class DynamicBaseUrlTransform extends Transform {
                     jarInput.contentTypes, jarInput.scopes, Format.JAR)
             FileUtils.copyFile(jarInput.file, dest)
         }
+    }
+
+    static List<String> findIgnoreMethod(InputStream inputStream, String serviceAnnotation, String ignoreAnnotation) {
+        ClassReader classReader = new ClassReader(IOUtils.toByteArray(inputStream))
+        ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)
+        FindIgnoreMethodClassVisitor cv = new FindIgnoreMethodClassVisitor(classWriter, serviceAnnotation, ignoreAnnotation)
+        classReader.accept(cv, ClassReader.EXPAND_FRAMES)
+        return cv.ignoreMethod
     }
 
     /**

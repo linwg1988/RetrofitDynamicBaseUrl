@@ -2,6 +2,14 @@ package org.linwg.plugins.visitor;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.TypePath;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 要注入注解的方法访问器
@@ -13,8 +21,8 @@ public class TransformMethodVisitor extends MethodVisitor {
     private String annotationValue;
     private String methodAnnotation;
 
-    public TransformMethodVisitor(String annotationValue, int api, MethodVisitor mv, String methodAnnotation) {
-        super(api, mv);
+    public TransformMethodVisitor(String annotationValue, MethodVisitor mv, String methodAnnotation) {
+        super( Opcodes.ASM4, mv);
         this.annotationValue = annotationValue;
         this.methodAnnotation = methodAnnotation.replace(".", "/");
     }
