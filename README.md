@@ -20,4 +20,4 @@ dynamicBaseUrlConfig{
 }
 ~~~
 
- ![img](https://github.com/linwg1988/RetrofitDynamicBaseUrl/demo.gif) 
+ ![img](https://github.com/linwg1988/RetrofitDynamicBaseUrl/blob/master/demo.gif) 
