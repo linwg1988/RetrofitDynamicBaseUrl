@@ -19,3 +19,5 @@ dynamicBaseUrlConfig{
     ignoreJar true                                                      //是否忽略jar包注入
 }
 ~~~
+
+ ![img](https://github.com/linwg1988/RetrofitDynamicBaseUrl/demo.gif) 
