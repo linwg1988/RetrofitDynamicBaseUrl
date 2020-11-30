@@ -3,7 +3,7 @@
 
 在工程目录下的build.gradle文件下添加依赖：
 ~~~
-classpath 'org.linwg.dynamic:plugins:1.0.0'
+classpath 'org.linwg.dynamic:plugins:1.0.1'
 ~~~
 在module目录下的build.gradle文件下添加插件：
 ~~~
@@ -19,5 +19,6 @@ dynamicBaseUrlConfig{
     ignoreJar true                                                      //是否忽略jar包注入
 }
 ~~~
-
+## 1.0.1
+新增对module 为 lib 的支持
  ![img](https://github.com/linwg1988/RetrofitDynamicBaseUrl/blob/master/demo.gif) 

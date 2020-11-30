@@ -6,6 +6,6 @@ uploadArchives {
         repository(url: uri('D:/repos'))
         pom.groupId = 'org.linwg.dynamic'
         pom.artifactId = 'plugins'
-        pom.version = '1.0.0'
+        pom.version = '1.0.1'
     }
 }

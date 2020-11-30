@@ -21,9 +21,11 @@ import java.util.zip.ZipEntry
 
 class DynamicBaseUrlTransform extends Transform {
     Project project
+    boolean isLib = false
 
-    DynamicBaseUrlTransform(Project project) {
+    DynamicBaseUrlTransform(Project project, boolean isLib) {
         this.project = project
+        this.isLib = isLib
     }
 
     @Override
@@ -38,7 +40,11 @@ class DynamicBaseUrlTransform extends Transform {
 
     @Override
     Set<? super QualifiedContent.Scope> getScopes() {
-        return TransformManager.SCOPE_FULL_PROJECT
+        if (isLib) {
+            return TransformManager.PROJECT_ONLY
+        } else {
+            return TransformManager.SCOPE_FULL_PROJECT
+        }
     }
 
     @Override
